@@ -1,0 +1,46 @@
+name: TimurBay
+options:
+  bundleIdPrefix: ua.timurbay
+  deploymentTarget:
+    iOS: "15.0"
+settings:
+  base:
+    MARKETING_VERSION: "1.4"
+    CURRENT_PROJECT_VERSION: "5"
+targets:
+  TimurBay:
+    type: application
+    platform: iOS
+    sources:
+      - path: TimurBay
+        excludes:
+          - "www/**"
+      - path: TimurBay/www
+        type: folder
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ua.timurbay.game
+        PRODUCT_NAME: TimurBay
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_VERSION: "5.0"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    info:
+      path: Info.plist
+      properties:
+        CFBundleDisplayName: Тимур-Бей
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen: {}
+        UIRequiresFullScreen: true
+        UIStatusBarHidden: true
+        UIViewControllerBasedStatusBarAppearance: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+        ITSAppUsesNonExemptEncryption: false

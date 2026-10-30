@@ -7,3 +7,7 @@
 5. Для гри через інтернет — розгорни на Render.com (Web Service, Build: `npm install`, Start: `npm start`). Адреса за замовчуванням у грі й APK: wss://timur-bay.onrender.com.
 
 Оновити гру: заміни public/index.html новою версією на GitHub — Render оновиться сам.
+
+## iPhone / iPad
+- Через Safari: відкрий адресу сервера → «Поділитися» → «На початковий екран».
+- Застосунок (.ipa): папки `ios/` і `.github/` збирають його на Mac від GitHub (вкладка Actions → «iOS build»). Встановлення з Windows — через Sideloadly з власним Apple ID.

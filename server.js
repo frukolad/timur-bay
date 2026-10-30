@@ -21,6 +21,18 @@ const server = http.createServer((req, res) => {
     });
     return;
   }
+  // файли для iPhone/Android «на головний екран»: іконки, маніфест, service worker
+  const STATIC = { '/manifest.webmanifest': 'application/manifest+json', '/sw.js': 'text/javascript; charset=utf-8',
+    '/icon-192.png': 'image/png', '/icon-512.png': 'image/png', '/apple-touch-icon.png': 'image/png' };
+  const url = req.url.split('?')[0];
+  if (STATIC[url]) {
+    fs.readFile(path.join(__dirname, 'public', url.slice(1)), (err, data) => {
+      if (err) { res.writeHead(404); res.end('404'); return; }
+      res.writeHead(200, { 'Content-Type': STATIC[url], 'Cache-Control': url === '/sw.js' ? 'no-cache' : 'public, max-age=86400' });
+      res.end(data);
+    });
+    return;
+  }
   res.writeHead(404); res.end('404');
 });
 

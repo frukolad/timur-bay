@@ -90,6 +90,8 @@ wss.on('connection', ws => {
         if (room.players.size >= MAX_PLAYERS) { send(ws, { t: 'err', msg: 'Кімната заповнена' }); return; }
       }
       me.name = clean(m.name); me.look = (m.look && typeof m.look === 'object') ? m.look : {}; me.room = room;
+      if (Number.isFinite(+m.coins) && m.coins !== undefined) me.coins = Math.max(0, Math.min(1000000, Math.floor(+m.coins)));
+      if (Number.isFinite(+m.kills) && m.kills !== undefined) me.kills = Math.max(0, Math.min(100000, Math.floor(+m.kills)));   // повернення після обриву зв'язку
       room.players.set(me.id, me);
       send(ws, { t: 'joined', room: room.code, n: room.n || 0, id: me.id, seed: room.seed, coins: me.coins, blocks: room.blocks.slice(-3000),
         players: [...room.players.values()].filter(p => p !== me).map(p => ({ id: p.id, name: p.name, look: p.look })) });

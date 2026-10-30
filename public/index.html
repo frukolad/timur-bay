@@ -230,6 +230,7 @@ body.touch #mini{width:min(115px,30vh);height:min(115px,30vh)}
 .adv{margin-top:4px;color:var(--muted);font-size:12px}
 .adv summary{cursor:pointer;padding:4px 0}
 #lb{position:absolute;right:max(16px,env(safe-area-inset-right,0px));top:calc(max(10px,env(safe-area-inset-top,0px)) + 56px);width:170px;background:rgba(21,17,42,.45);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:4px 0;overflow:hidden;transition:height .3s}
+#lb::before{content:'ГРАВЦІ ОНЛАЙН';position:absolute;left:10px;top:5px;font-size:9px;letter-spacing:.12em;color:var(--muted);font-weight:600}
 #lb .lr{position:absolute;left:0;right:0;top:0;height:22px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 10px;font-size:12px;font-weight:600;color:rgba(255,248,231,.92);transition:transform .45s cubic-bezier(.3,1.3,.5,1)}
 #lb .lr span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #lb .lr b{font-family:var(--display);font-weight:400;color:var(--gold);font-variant-numeric:tabular-nums}
@@ -1709,7 +1710,7 @@ function meleeHit(e,fx,fy,fz,reach,dmg){let hit=null,best=reach+.4;const ex=e.x,
   return hit;}
 let hitTO=0;
 function hurt(o,dmg,src){
-  if(!o.alive)return;
+  if(!o.alive)return;if(o.isPlayer&&o.shield>gameT)return;
   if(o.remote){if(src&&src.isPlayer&&dmg>0){NET.send('hit',{to:o.id,dmg:Math.round(dmg)});const cr=$('cross');cr.classList.add('hit');clearTimeout(hitTO);hitTO=setTimeout(()=>cr.classList.remove('hit'),140);sfx('hit',.8);}return;}
   if(o.heli&&o.heli.alive){const h=o.heli;h.hp-=dmg;if(o.isPlayer){$('vign').style.opacity=.5;setTimeout(()=>$('vign').style.opacity=0,150);}if(h.hp<=0)destroyHeli(h,src);return;}
   if(o.car&&o.car.alive){const c=o.car;c.hp-=dmg;drawTag(c);if(o.isPlayer){$('vign').style.opacity=.5;setTimeout(()=>$('vign').style.opacity=0,150);}if(src&&src.isPlayer)sfx('hit',.6);if(c.hp<=0)destroyCar(c,src);return;}
@@ -1737,7 +1738,9 @@ function kill(o,src){
   else respawnQ.push({b:o,t:gameT+20});
   updateHud();}
 function respawnPlayer(){const p=player;let s=null;
-  if(p.home&&tide<p.home.y-.5)s={x:p.home.x,y:p.home.y,z:p.home.z};
+  if(NET.online){/* онлайн: відроджуємось неподалік, щоб інші гравці тебе бачили */for(let i=0;i<40&&!s;i++){const a=Math.random()*Math.PI*2,d=rr(35,90),x=clamp(p.x+Math.cos(a)*d,-WORLD+20,WORLD-20),z=clamp(p.z+Math.sin(a)*d,-WORLD+20,WORLD-20);const y=groundH(x,z,null,60);if(y>tide+.3&&terrainH(x,z)>1.2&&free(x,z,.5))s={x,y,z};}
+    p.shield=gameT+3;}
+  else if(p.home&&tide<p.home.y-.5)s={x:p.home.x,y:p.home.y,z:p.home.z};
   if(!s){for(let i=0;i<20&&!s;i++){const x=PROM_X+rr(14,30),z=rr(-600,600);if(Math.abs(z-PIER.z)<10||bridges.some(b=>Math.abs(z-b.z)<b.W))continue;const y=groundH(x,z,null,60);if(y>tide+.3&&free(x,z,.5))s={x,y,z};}}
   if(!s)s={x:HILL.x,z:HILL.z+3,y:H0+HILL.h-3.3};
   p.x=s.x;p.z=s.z;p.y=s.y+.05;p.vy=0;p.hp=p.maxHp;p.alive=true;p.swim=SWIM;p.chute=false;p.kx=p.kz=0;
@@ -2482,7 +2485,7 @@ function drawMini(){const MS=mini.width,view=380,k=1024/SZ,s=view*k,cx=(player.x
   for(const l of loot)dot(l.x,l.z,'#ffc93c',2.5);for(const c of crates)dot(c.x,c.z,'#ffc93c',3);for(const c of coins)if(c.n>=40)dot(c.x,c.z,'#ffe066',2.2);
   for(const c of cars)if(c.alive)dot(c.x,c.z,c.driver===player?'#3ad6ff':c.police?'#9fd0ff':c.sport?'#ff3fa4':'#f2efe8',2.2);for(const h of helis)dot(h.x,h.z,h.pilot===player?'#3ad6ff':'#c8f0ff',3.2);for(const b of buses)dot(b.x,b.z,'#ffb000',3.4);
   for(const r of rafts)dot(r.x,r.z,'#b07a3c',2.5);
-  for(const e of ents){if(!e.alive||e.isPlayer)continue;if(e.remote){dot(e.x,e.z,'#c86bff',3.6);continue;}if(e.cop)dot(e.x,e.z,(simT*4|0)%2?'#2f7bff':'#ff3b3b',3.2);else if(e.thief)dot(e.x,e.z,'#ff3b3b',4);else if(Math.hypot(e.x-player.x,e.z-player.z)<60)dot(e.x,e.z,'#ff4d4d',2.5);}
+  for(const e of ents){if(!e.alive||e.isPlayer)continue;if(e.remote){let [a,b2]=T(e.x,e.z);const dx=a-MS/2,dy=b2-MS/2,dd=Math.hypot(dx,dy),R=MS/2-6;if(dd>R){a=MS/2+dx/dd*R;b2=MS/2+dy/dd*R;}mg.fillStyle='#c86bff';mg.strokeStyle='#fff';mg.lineWidth=1.5;mg.beginPath();mg.arc(a,b2,4.2,0,Math.PI*2);mg.fill();mg.stroke();continue;}if(e.cop)dot(e.x,e.z,(simT*4|0)%2?'#2f7bff':'#ff3b3b',3.2);else if(e.thief)dot(e.x,e.z,'#ff3b3b',4);else if(Math.hypot(e.x-player.x,e.z-player.z)<60)dot(e.x,e.z,'#ff4d4d',2.5);}
   if(task&&task.dest){let [a,b]=T(task.dest.x,task.dest.z);const dx=a-MS/2,dy=b-MS/2,dd=Math.hypot(dx,dy),R=MS/2-7;if(dd>R){a=MS/2+dx/dd*R;b=MS/2+dy/dd*R;}mg.fillStyle='#ffc93c';mg.strokeStyle='#15112a';mg.lineWidth=2;mg.beginPath();mg.arc(a,b,5,0,Math.PI*2);mg.fill();mg.stroke();}
   if(GPS.path){drawRoute(mg,T,3,'#ffc93c');let [a,b]=T(GPS.target.x,GPS.target.z);const dx=a-MS/2,dy=b-MS/2,dd=Math.hypot(dx,dy),R=MS/2-9;if(dd>R){a=MS/2+dx/dd*R;b=MS/2+dy/dd*R;}drawPin(mg,a,b+8,7);}
   if(race&&cpMark&&cpMark.visible)dot(cpMark.position.x,cpMark.position.z,'#5ef08a',4);
@@ -2560,7 +2563,7 @@ function toMenu(){if(NET.online||NET.ws)netLeave();state='menu';try{if(document.
 $('quitBtn').addEventListener('click',()=>{if(state==='play')endGame();});
 $('menuBtn').addEventListener('click',toMenu);$('pauseMenuBtn').addEventListener('click',toMenu);
 $('resumeBtn').addEventListener('click',()=>{$('pause').hidden=true;state='play';tryLock();});
-$('playBtn').addEventListener('click',()=>{if(NET.online||NET.ws)netLeave();if(custom.mode==='on'){initAudio();quickJoin();return;}startGame();});$('againBtn').addEventListener('click',()=>{$('over').hidden=true;startGame();});
+$('playBtn').addEventListener('click',()=>{if(NET.online||NET.ws)netLeave();if(custom.mode==='on'){initAudio();quickJoin();return;}startGame();});$('againBtn').addEventListener('click',()=>{$('over').hidden=true;if(custom.mode==='on'){initAudio();quickJoin();return;}startGame();});
 function bindChips(id,key,after){document.querySelectorAll('#'+id+' button').forEach(b=>{b.setAttribute('aria-pressed',b.dataset.v===custom[key]);b.addEventListener('click',()=>{custom[key]=b.dataset.v;saveLook();document.querySelectorAll('#'+id+' button').forEach(x=>x.setAttribute('aria-pressed',x===b));if(after)after();});});}
 bindChips('optDay','daynight',()=>{skyKey='';});bindChips('optBots','bots');bindChips('optTide','tide');bindChips('optCity','city');bindChips('optWeather','weather',()=>{applyWeather();setRain(false);});
 
@@ -2768,18 +2771,21 @@ function netStatus(t){$('netStatus').textContent=t;}
 const DEFAULT_SRV='wss://timur-bay.onrender.com';
 function servedByGame(){const h=location.hostname||'';return /^https?:$/.test(location.protocol)&&h&&!/claude|anthropic|usercontent/.test(h);}
 function defaultSrv(){if(servedByGame())return(location.protocol==='https:'?'wss://':'ws://')+location.host;return custom.srv||DEFAULT_SRV;}
-function netConnect(then){let url=$('srvUrl').value.trim().replace(/^https:/,'wss:').replace(/^http:/,'ws:').replace(/\/+$/,'');if(url&&!/^wss?:\/\//.test(url))url='wss://'+url;$('srvUrl').value=url;if(!url){netStatus('Вкажи адресу сервера в «Адреса сервера»');return;}
-  if(!servedByGame()){custom.srv=url;saveLook();}if(NET.ws&&NET.ws.readyState===1&&NET.url===url){then&&then();return;}
-  try{if(NET.ws)NET.ws.close();}catch(e){}
+function netConnect(then,force){let url=$('srvUrl').value.trim().replace(/^https:/,'wss:').replace(/^http:/,'ws:').replace(/\/+$/,'');if(url&&!/^wss?:\/\//.test(url))url='wss://'+url;$('srvUrl').value=url;if(!url){netStatus('Вкажи адресу сервера в «Адреса сервера»');return;}
+  if(!servedByGame()){custom.srv=url;saveLook();}if(!force&&NET.ws&&NET.ws.readyState===1&&NET.url===url){then&&then();return;}
+  try{if(NET.ws){NET.ws.bye=true;NET.ws.close();}}catch(e){}
   netStatus('Підключаюся… (безкоштовний сервер може прокидатися до хвилини)');let ws;try{ws=new WebSocket(url);}catch(e){netStatus('Невірна адреса сервера');return;}
   NET.ws=ws;NET.url=url;ws.onopen=()=>{netStatus('Підключено! Заходжу в місто…');then&&then();};
   ws.onmessage=e=>{let m;try{m=JSON.parse(e.data);}catch(x){return;}netMsg(m);};
   ws.onerror=()=>{netStatus('Не вдалося підключитися. Сервер міг заснути — зачекай хвилину і натисни ще раз. Або перевір «Адреса сервера».');$('playBtn').disabled=false;};
-  ws.onclose=()=>{$('playBtn').disabled=false;if(NET.online){NET.online=false;feed("Зв'язок із сервером втрачено — гра продовжується офлайн");for(const r of NET.remotes.values())removeRemote(r);$('netPill').hidden=true;$('lb').hidden=true;}};}
+  ws.onclose=()=>{$('playBtn').disabled=false;if(ws.bye||NET.ws!==ws)return;
+    if(NET.online||NET.re){const first=NET.online;NET.online=false;NET.re=true;if(first){feed("Зв'язок втрачено — перепідключаюся…");for(const r of NET.remotes.values())removeRemote(r);$('netPill').hidden=true;}
+      NET.tries=(NET.tries||0)+1;if(NET.tries>40||state==='menu'){NET.re=false;feed("Не вдалося відновити зв'язок — гра продовжується офлайн");$('lb').hidden=true;return;}
+      setTimeout(()=>{if(NET.re&&state!=='menu')netConnect(()=>netRaw(Object.assign({t:'quick'},hello())),true);},3000);}};}
 NET.remotes=new Map();NET.sendT=0;
 NET.send=function(type,data){this.log.push([type,data]);if(this.log.length>60)this.log.shift();if(this.online&&this.ws&&this.ws.readyState===1)this.ws.send(JSON.stringify(Object.assign({},data,{t:type})));};
 function netRaw(o){if(NET.ws&&NET.ws.readyState===1)NET.ws.send(JSON.stringify(o));}
-function hello(){return{name:(custom.name||'Гравець').slice(0,14),look:myLook()};}
+function hello(){const o={name:(custom.name||'Гравець').slice(0,14),look:myLook()};if(NET.re&&player){o.coins=player.coins;o.kills=player.kills||0;}return o;}
 function quickJoin(){$('playBtn').disabled=true;netConnect(()=>netRaw(Object.assign({t:'quick'},hello())));setTimeout(()=>{$('playBtn').disabled=false;},70000);}
 function createRoom(){netConnect(()=>netRaw(Object.assign({t:'create',seed:custom.city==='new'?Math.floor(Math.random()*1e9):20261029},hello())));}
 function joinRoom(code){code=String(code||$('roomCode').value).trim().toUpperCase();if(code.length<4){netStatus('Введи код кімнати з 4 символів');return;}netConnect(()=>netRaw(Object.assign({t:'join',room:code},hello())));}
@@ -2788,8 +2794,9 @@ function netMsg(m){
     case 'rooms':break;
     case 'score':NET.lastScore=m.list||[];renderScore(NET.lastScore.slice());break;
     case 'err':netStatus(m.msg||'Помилка');break;
-    case 'joined':NET.online=true;NET.id=m.id;NET.room=m.room;NET.roomN=m.n||0;NET.forceSeed=m.seed;NET.me=m.id;netStatus('Заходжу в місто…');$('playBtn').disabled=false;
-      NET.pending=m;startGame();break;
+    case 'joined':{const re=NET.re&&player&&state!=='menu'&&state!=='over'&&NET.forceSeed===m.seed;NET.re=false;NET.tries=0;
+      NET.online=true;NET.id=m.id;NET.room=m.room;NET.roomN=m.n||0;NET.forceSeed=m.seed;NET.me=m.id;netStatus('Заходжу в місто…');$('playBtn').disabled=false;
+      NET.pending=m;if(re){delete m.coins;netAfterStart();feed("Зв'язок відновлено!");}else startGame();break;}
     case 'join':if(state!=='menu')addRemote(m.id,m.name,m.look);feed(`${m.name} заходить у місто`);updateNetPill();break;
     case 'leave':{const r=NET.remotes.get(m.id);if(r){feed(`${r.name} вийшов`);removeRemote(r);}updateNetPill();break;}
     case 's':{const r=NET.remotes.get(m.id);if(r)remoteState(r,m);break;}
@@ -2805,7 +2812,7 @@ function netMsg(m){
   }}
 function addRemote(id,name,look){if(NET.remotes.has(id))return NET.remotes.get(id);look=Object.assign({shirt:'#8e44ec',acc:'#ffd23f',hat:'cap',skin:SKINS[0],gender:'boy',mask:'none'},look||{});
   const r=makeEnt({id,name:String(name||'Гравець').slice(0,14),remote:true,look,wk:'sword',hp:100,maxHp:100,coins:0});r.ch=makeChar(look,'sword',false);r.tag=makeTag();r.ch.root.add(r.tag.sp);scene.add(r.ch.root);drawTag(r);
-  r.tx=r.x;r.ty=r.y;r.tz=r.z;r.vt=0;r.veh=null;NET.remotes.set(id,r);ents.push(r);return r;}
+  r.tag.sp.material.depthTest=false;r.tag.sp.renderOrder=20;r.tag.sp.scale.set(2.2,.69,1);r.tx=r.x;r.ty=r.y;r.tz=r.z;r.vt=0;r.veh=null;NET.remotes.set(id,r);ents.push(r);return r;}
 function removeRemote(r){scene.remove(r.ch.root);if(r.veh)scene.remove(r.veh);NET.remotes.delete(r.id);const i=ents.indexOf(r);if(i>=0)ents.splice(i,1);}
 function remoteState(r,m){const p=m.p;if(!p)return;r.tx=p[0];r.ty=p[1];r.tz=p[2];r.tyaw=p[3];r.vh=p[5];r.vy2=p[6];
   if(!r.alive&&m.a){r.alive=true;r.x=r.tx;r.y=r.ty;r.z=r.tz;}r.alive=!!m.a;r.hp=m.hp??r.hp;
@@ -2814,10 +2821,16 @@ function remoteState(r,m){const p=m.p;if(!p)return;r.tx=p[0];r.ty=p[1];r.tz=p[2]
     if(k==='jeep')r.veh=makeJeep(r.look.shirt,null,false).g;else if(k==='sport')r.veh=makeSport(r.look.shirt).g;else if(k==='heli'){const hm=makeHeli(r.look.shirt);r.veh=hm.g;r.veh.userData.rotor=hm.rotor;}else if(k==='raft')r.veh=makeRaftMesh();
     if(r.veh)scene.add(r.veh);}
   drawTag(r);}
+const SEATS={1:{x:-.45,y:.62,z:.12},2:{x:-.4,y:.2,z:-.3},3:{x:0,y:.95,z:.9}};
 function remoteStep(dt){for(const r of NET.remotes.values()){const k=Math.min(1,dt*10),ox=r.x,oz=r.z;r.x+=(r.tx-r.x)*k;r.y+=(r.ty-r.y)*k;r.z+=(r.tz-r.z)*k;
   let df=(r.tyaw||0)-r.face;while(df>Math.PI)df-=Math.PI*2;while(df<-Math.PI)df+=Math.PI*2;r.face+=df*k;r.spd=Math.hypot(r.x-ox,r.z-oz)/Math.max(dt,1e-4);
-  const inV=r.vt===1||r.vt===2||r.vt===3;r.ch.root.visible=r.alive&&!inV;r.ch.root.position.set(r.x,r.y,r.z);r.ch.root.rotation.y=r.face;if(r.ch.root.visible)animChar(r.ch,r,dt);
-  if(r.veh){r.veh.visible=r.alive;const vh=r.vh||0;if(r.vt===3){r.veh.position.set(r.x,r.y-.6,r.z);if(r.veh.userData.rotor)r.veh.userData.rotor.rotation.y+=dt*28;}else if(r.vt===4)r.veh.position.set(r.x,tide+.12,r.z);else r.veh.position.set(r.x,r.y-.8,r.z);r.veh.rotation.y=vh;}}}
+  const vh=r.vh||0;
+  if(r.veh){r.veh.visible=r.alive;if(r.vt===3){r.veh.position.set(r.x,r.y-.6,r.z);if(r.veh.userData.rotor)r.veh.userData.rotor.rotation.y+=dt*28;}else if(r.vt===4)r.veh.position.set(r.x,tide+.12,r.z);else r.veh.position.set(r.x,r.y-.8,r.z);r.veh.rotation.y=vh;}
+  const seat=r.veh&&SEATS[r.vt];r.ch.root.visible=r.alive;
+  if(seat){const c=Math.cos(vh),s=Math.sin(vh),v=r.veh.position;r.ch.root.position.set(v.x+seat.x*c+seat.z*s,v.y+seat.y,v.z-seat.x*s+seat.z*c);r.ch.root.rotation.y=vh;
+    r.ch.legL.rotation.x=r.ch.legR.rotation.x=-Math.PI/2;r.ch.armL.rotation.x=r.ch.armR.rotation.x=-1;r.seated=true;}
+  else{if(r.seated){r.seated=false;r.ch.legL.rotation.x=r.ch.legR.rotation.x=0;r.ch.armL.rotation.x=r.ch.armR.rotation.x=0;}
+    r.ch.root.position.set(r.x,r.y,r.z);r.ch.root.rotation.y=r.face;if(r.ch.root.visible)animChar(r.ch,r,dt);}}}
 function myVeh(){const p=player;return p.car?(p.car.sport?2:1):p.heli?3:p.raft?4:p.bus?5:0;}
 function netTick(dt){if(!NET.online||!player)return;NET.sendT-=dt;if(NET.sendT>0)return;NET.sendT=.1;const p=player,v=myVeh(),vo=p.car||p.heli||p.raft||p.bus;
   const R=x=>Math.round(x*100)/100;NET.send('s',{p:[R(p.x),R(p.y),R(p.z),R(p.car||p.heli?vo.h:p.raft?vo.yaw:p.bus?vo.h:p.yaw+Math.PI),0,R(vo?(vo.h??vo.yaw??0):0),0],v,w:p.wk,a:p.alive?1:0,hp:Math.max(0,Math.round(p.hp/p.maxHp*100))});}
@@ -2826,17 +2839,17 @@ function updateNetPill(){const el=$('netPill');if(!NET.online){el.hidden=true;re
 const LB={rows:new Map(),order:[]};
 if(TOUCH)document.querySelector('.sub-pills').appendChild($('lb'));
 function renderScore(list){const el=$('lb');el.hidden=!NET.online||list.length<1;
-  list.sort((a,b)=>(b.k-a.k)||String(a.name).localeCompare(String(b.name)));const top=list.slice(0,8),H=TOUCH?20:22,seen=new Set();
-  top.forEach((q,i)=>{let r=LB.rows.get(q.id);if(!r){r=document.createElement('div');r.className='lr';r.innerHTML='<span></span><b></b>';el.appendChild(r);LB.rows.set(q.id,r);r.style.transform=`translateY(${i*H+4}px)`;}
+  list.sort((a,b)=>(b.k-a.k)||String(a.name).localeCompare(String(b.name)));const top=list.slice(0,8),H=TOUCH?20:22,TOP=20,seen=new Set();
+  top.forEach((q,i)=>{let r=LB.rows.get(q.id);if(!r){r=document.createElement('div');r.className='lr';r.innerHTML='<span></span><b></b>';el.appendChild(r);LB.rows.set(q.id,r);r.style.transform=`translateY(${i*H+TOP}px)`;}
     const old=LB.order.indexOf(q.id);if(old>i&&old>=0){r.classList.remove('up');void r.offsetWidth;r.classList.add('up');}
-    r.classList.toggle('me',q.id===NET.id);r.firstChild.textContent=q.id===NET.id?(q.name+' (ти)'):q.name;r.lastChild.textContent=q.k;r.style.transform=`translateY(${i*H+4}px)`;seen.add(q.id);});
+    r.classList.toggle('me',q.id===NET.id);r.firstChild.textContent=q.id===NET.id?(q.name+' (ти)'):q.name;r.lastChild.textContent=q.k;r.style.transform=`translateY(${i*H+TOP}px)`;seen.add(q.id);});
   for(const [id,r] of LB.rows)if(!seen.has(id)){r.remove();LB.rows.delete(id);}
-  LB.order=top.map(q=>q.id);el.style.height=(top.length*H+8)+'px';}
+  LB.order=top.map(q=>q.id);el.style.height=(top.length*H+TOP+4)+'px';}
 function netAfterStart(){const m=NET.pending;NET.pending=null;if(!m)return;for(const r of NET.remotes.values())removeRemote(r);
   for(const q of m.players||[])addRemote(q.id,q.name,q.look);if(typeof m.coins==='number')player.coins=m.coins;
   for(const [a,b] of m.blocks||[]){if(a==='a'&&BT[b.b]&&cellFree(b.x,b.z,b.y).ok)addBlock(b.b,b.x,b.z,b.y,false);else if(a==='d')netMsg({t:'bdel',x:b.x,z:b.z,y:b.y});}
   updateNetPill();updateHud();if(NET.lastScore)renderScore(NET.lastScore);feed(`Ти в онлайн-місті! Гравців: ${NET.remotes.size+1}`);}
-function netLeave(){if(NET.ws){try{NET.ws.close();}catch(e){}}NET.online=false;NET.forceSeed=null;for(const r of NET.remotes.values())removeRemote(r);$('netPill').hidden=true;$('lb').hidden=true;$('lb').innerHTML='';LB.rows.clear();LB.order=[];NET.lastScore=null;}
+function netLeave(){NET.re=false;NET.tries=0;if(NET.ws){try{NET.ws.bye=true;NET.ws.close();}catch(e){}}NET.online=false;NET.forceSeed=null;for(const r of NET.remotes.values())removeRemote(r);$('netPill').hidden=true;$('lb').hidden=true;$('lb').innerHTML='';LB.rows.clear();LB.order=[];NET.lastScore=null;}
 $('srvUrl').value=defaultSrv();
 $('srvUrl').addEventListener('keydown',e=>e.stopPropagation());$('optName').addEventListener('keydown',e=>e.stopPropagation());
 function showMode(){$('onlineBox').hidden=custom.mode!=='on';{const on=custom.mode==='on',ob=$('optBots');ob.hidden=on;if(ob.previousElementSibling)ob.previousElementSibling.hidden=on;}$('playBtn').textContent=custom.mode==='on'?'ГРАТИ ОНЛАЙН':'ГРАТИ';}

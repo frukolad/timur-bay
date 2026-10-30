@@ -8,6 +8,3 @@
 
 Оновити гру: заміни public/index.html новою версією на GitHub — Render оновиться сам.
 
-## iPhone / iPad
-- Через Safari: відкрий адресу сервера → «Поділитися» → «На початковий екран».
-- Застосунок (.ipa): папки `ios/` і `.github/` збирають його на Mac від GitHub (вкладка Actions → «iOS build»). Встановлення з Windows — через Sideloadly з власним Apple ID.

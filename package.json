@@ -1,0 +1,9 @@
+{
+  "name": "timur-bay-server",
+  "version": "1.0.0",
+  "description": "Онлайн-сервер для гри Тимур-Бей",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" },
+  "dependencies": { "ws": "^8.18.0" }
+}

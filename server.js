@@ -105,7 +105,7 @@ wss.on('connection', ws => {
     switch (m.t) {
       case 's':     // стан гравця 10 разів на секунду
         me.s = m.p;
-        broadcast(room, { t: 's', id: me.id, p: m.p, v: m.v, w: m.w, a: m.a, hp: m.hp }, ws); break;
+        broadcast(room, { t: 's', id: me.id, p: m.p, v: m.v, vid: m.vid, w: m.w, a: m.a, hp: m.hp }, ws); break;
       case 'shot':
         broadcast(room, { t: 'shot', id: me.id, o: m.o, d: m.d, w: m.w }, ws); break;
       case 'boom':

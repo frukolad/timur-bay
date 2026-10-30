@@ -1490,7 +1490,7 @@ function fireCar(c,dx,dy,dz){if(c.cd>0)return;const ow=c.driver,me=ow&&ow.isPlay
     const r=rayHit(tp.x,tp.y,tp.z,dx,dy,dz,8);if(r&&r.box&&(r.box.kind==='crate'||r.box.kind==='palm'||r.box.kind==='block'&&r.box.type==='wood'))damageSolid(r.box,500,ow);
     if(Math.random()<.4)sfx('flame',me?.6:volAt(c)*.6);}
   c.aimYaw=Math.atan2(dx,dz);}
-function carNear(){if(!player||player.y<-20)return null;let best=null,bd=3.8;for(const c of cars){if(!c.alive||c.driver)continue;const d=Math.hypot(c.x-player.x,c.z-player.z);if(d<bd&&Math.abs(c.y-player.y)<2.5){bd=d;best=c;}}return best;}
+function carNear(){if(!player||player.y<-20)return null;let best=null,bd=3.8;for(const c of cars){if(!c.alive||c.driver||c.netDrv)continue;const d=Math.hypot(c.x-player.x,c.z-player.z);if(d<bd&&Math.abs(c.y-player.y)<2.5){bd=d;best=c;}}return best;}
 function enterCar(c){player.car=c;c.driver=player;c.sleep=false;c.rest=0;player.chute=false;player.yaw=c.h+Math.PI;player.pitch=-.12;sfx('engine',1);
   feed(`${c.name}! W/S — газ, A/D — кермо, ЛКМ — ${c.weapon?'стріляти':'гудок'}, F — вийти. Бензин: ${Math.floor(c.gas)} л`);}
 function leaveCar(){const c=player.car;if(!c)return;player.car=null;c.driver=null;const rx=Math.cos(c.h),rz=-Math.sin(c.h);let px=c.x-rx*2.3,pz=c.z-rz*2.3;if(!free(px,pz,.35)){px=c.x+rx*2.3;pz=c.z+rz*2.3;}
@@ -1809,7 +1809,7 @@ function flyHeli(h,dt,f,s,up){h.rot=Math.min(1,h.rot+dt*.6);const lift=h.rot>=1,
   const nx=h.x+fx*h.v*dt,nz=h.z+fz*h.v*dt;if(heliBlocked(h,nx,nz)){if(Math.abs(h.v)>12){h.hp-=Math.abs(h.v)*40;sfx('clang',.8);}h.v*=-.3;}else{h.x=nx;h.z=nz;}
   h.y+=h.vy*dt;const g2=heliGround(h,h.x,h.z);if(h.y<g2){if(h.vy<-12){h.hp=0;}else if(h.vy<-8)h.hp-=900;h.y=g2;h.vy=Math.max(0,h.vy);}if(h.y>200){h.y=200;h.vy=0;}
   h.tilt+=((f*.16)-h.tilt)*Math.min(1,dt*3);if(h.hp<=0)destroyHeli(h,null);}
-function heliNear(){if(!player||player.y<-20)return null;for(const h of helis)if(h.alive&&!h.pilot&&Math.hypot(h.x-player.x,h.z-player.z)<5&&Math.abs(h.y-player.y)<3)return h;return null;}
+function heliNear(){if(!player||player.y<-20)return null;for(const h of helis)if(h.alive&&!h.pilot&&!h.netDrv&&Math.hypot(h.x-player.x,h.z-player.z)<5&&Math.abs(h.y-player.y)<3)return h;return null;}
 function enterHeli(h){if(h.pilot)return;player.heli=h;h.pilot=player;h.wpn=h.wpn||'bomb';player.chute=false;player.yaw=h.h+Math.PI;player.pitch=-.25;sfx('engine',1);feed('Гелікоптер! W/S — вперед/назад, A/D — поворот, ПРОБІЛ — вгору, SHIFT — вниз, ЛКМ — стріляти, Q або 1/2 — бомби чи кулемет, F — вийти');}
 function leaveHeli(){const h=player.heli;if(!h)return;h.pilot=null;player.heli=null;const g=heliGround(h,h.x,h.z);
   if(h.y-g>3){player.x=h.x+Math.cos(h.h)*2.5;player.z=h.z-Math.sin(h.h)*2.5;player.y=h.y;player.vy=0;player.onGround=false;player.chute=true;sfx('chute');feed('Стрибок з гелікоптера — парашут!');}
@@ -1903,7 +1903,7 @@ function genWorld(){
   for(const k in palmGroups)rebuildPalmGroup(k);
   {const must=carQ.filter(q=>q.police||q.keep),rest=carQ.filter(q=>!q.police&&!q.keep);for(let i=rest.length-1;i>0;i--){const j=Math.floor(RNG()*(i+1));[rest[i],rest[j]]=[rest[j],rest[i]];}
     for(const q of must.concat(rest.slice(0,30)))if(free(q.x,q.z,1.6))spawnCar(q.x,q.z,q.yaw,q);}
-  for(const q of sportQ)spawnCar(q.x,q.z,q.yaw,{sport:true});for(const q of heliQ)spawnHeli(q.x,q.y,q.z,q.yaw);spawnBuses();
+  for(const q of sportQ)spawnCar(q.x,q.z,q.yaw,{sport:true});for(const q of heliQ)spawnHeli(q.x,q.y,q.z,q.yaw);cars.forEach((c,i)=>c.nid=i+1);helis.forEach((h,i)=>h.nid=i+1);spawnBuses();
   staticGroup=new THREE.Group();
   const reg={};for(const key in buckets){const sp=key[0]==='@'||key[0]==='E';for(const [geo,m] of buckets[key]){const rx=clamp(Math.floor((m.elements[12]+WORLD)/320),0,4),rz=clamp(Math.floor((m.elements[14]+WORLD)/320),0,4),rk=(sp?key:'S')+'|'+rx+'_'+rz;(reg[rk]=reg[rk]||[]).push([key,geo,m]);}}
   for(const rk in reg){const key=rk.split('|')[0];let mesh;
@@ -2380,7 +2380,7 @@ function update(dt){
     if(z0!==curWhere){curWhere=z0;$('where').textContent=z0.toUpperCase();if(gameT>1&&p.y>-20&&!['Місто','Море'].includes(z0))feed(`Ти тут: ${z0}`);}
     if(!roofHint&&p.onGround&&!p.car&&p.y>-20&&p.y-terrainH(p.x,p.z)>14){roofHint=true;feed('Високо! Стрибни вниз і натисни пробіл у повітрі — розкриється парашут');}
   }
-  for(const c of cars){if(!c.alive)continue;c.cd-=dt;if(!c.driver){if(c.sleep)continue;driveCar(c,dt,0,0);if(Math.abs(c.v)<.05&&c.vy===0){c.rest=(c.rest||0)+dt;if(c.rest>1.5)c.sleep=true;}else c.rest=0;}}
+  for(const c of cars){if(!c.alive)continue;c.cd-=dt;if(!c.driver){if(c.sleep||c.netDrv)continue;driveCar(c,dt,0,0);if(Math.abs(c.v)<.05&&c.vy===0){c.rest=(c.rest||0)+dt;if(c.rest>1.5)c.sleep=true;}else c.rest=0;}}
   for(const m of mobs)if(m.alive)mobUpdate(m,dt);
   for(let i=fallers.length-1;i>=0;i--){const fl=fallers[i];fl.t+=dt;fl.g.rotation.x=Math.min(Math.PI/2,fl.t*fl.t*2.4);if(fl.t>2.4){fl.g.position.y-=dt*1.5;}if(fl.t>4){scene.remove(fl.g);fallers.splice(i,1);}}
   wfT-=dt;if(wfT<=0){wfT=.25;for(const cv of caves){if(!cv.fall)continue;const d=Math.hypot(cv.fall.x-p.x,cv.fall.z-p.z);if(d<50){burst(cv.fall.x,Math.max(cv.fall.y,tide),cv.fall.z,'#e8f7ff',4,2.5);if(d<22&&Math.random()<.4)sfx('splash',(1-d/22)*.25);}}}
@@ -2436,7 +2436,7 @@ function update(dt){
   {const ph=Math.floor(simT/8)%2;TLM.r1.emissiveIntensity=ph;TLM.g1.emissiveIntensity=1-ph;TLM.r2.emissiveIntensity=1-ph;TLM.g2.emissiveIntensity=ph;}
   if(race)raceStep(dt);
   busStep(dt);stepBombs(dt);
-  for(const h of helis.slice()){h.cd-=dt;if(!h.pilot){h.rot=Math.max(0,h.rot-dt*.25);const g=heliGround(h,h.x,h.z);if(h.y>g+.05){h.vy=Math.max(h.vy-18*dt,-38);const nx=h.x+Math.sin(h.h)*h.v*dt,nz=h.z+Math.cos(h.h)*h.v*dt;if(!heliBlocked(h,nx,nz)){h.x=nx;h.z=nz;}h.v*=1-dt*.3;h.tilt+=dt*.4;const ny=h.y+h.vy*dt,g2=heliGround(h,h.x,h.z);if(ny<=g2){h.y=g2;if(h.vy<-10){destroyHeli(h,null);feed('Гелікоптер розбився!');continue;}h.vy=0;h.tilt=0;}else h.y=ny;}else{h.vy=0;h.tilt*=.9;}}
+  for(const h of helis.slice()){h.cd-=dt;if(!h.pilot&&!h.netDrv){h.rot=Math.max(0,h.rot-dt*.25);const g=heliGround(h,h.x,h.z);if(h.y>g+.05){h.vy=Math.max(h.vy-18*dt,-38);const nx=h.x+Math.sin(h.h)*h.v*dt,nz=h.z+Math.cos(h.h)*h.v*dt;if(!heliBlocked(h,nx,nz)){h.x=nx;h.z=nz;}h.v*=1-dt*.3;h.tilt+=dt*.4;const ny=h.y+h.vy*dt,g2=heliGround(h,h.x,h.z);if(ny<=g2){h.y=g2;if(h.vy<-10){destroyHeli(h,null);feed('Гелікоптер розбився!');continue;}h.vy=0;h.tilt=0;}else h.y=ny;}else{h.vy=0;h.tilt*=.9;}}
     const d=Math.hypot(h.x-p.x,h.z-p.z);h.m.g.visible=d<500;if(!h.m.g.visible)continue;h.m.g.position.set(h.x,h.y,h.z);h.m.g.rotation.set(h.tilt,h.h,0,'YXZ');h.m.rotor.rotation.y+=h.rot*dt*28;h.m.tail.rotation.x+=h.rot*dt*35;}
   if(lampPool){const on=litK>.15;lampPool.visible=on;lampGlow.visible=on;}
   if(p.car&&litK>.15){const c=p.car,fx=Math.sin(c.h),fz=Math.cos(c.h);headSpot.intensity=1.8;headSpot.position.set(c.x+fx*2,c.y+1.5,c.z+fz*2);headSpot.target.position.set(c.x+fx*30,c.y,c.z+fz*30);headSpot.target.updateMatrixWorld();}else headSpot.intensity=0;
@@ -2493,7 +2493,7 @@ function drawMini(){const MS=mini.width,view=380,k=1024/SZ,s=view*k,cx=(player.x
   if(player.alive){mg.translate(MS/2,MS/2);mg.rotate(-player.yaw);mg.fillStyle='#3ad6ff';mg.strokeStyle='#fff';mg.lineWidth=1.5;mg.beginPath();mg.moveTo(0,-7);mg.lineTo(5,5);mg.lineTo(-5,5);mg.closePath();mg.fill();mg.stroke();}
   mg.restore();}
 function openMap(){if(state!=='play')return;state='map';mouseDown=false;for(const k in keys)keys[k]=false;joy=null;$('stick').hidden=true;try{if(document.pointerLockElement)document.exitPointerLock();}catch(e){}
-  $('mapOv').hidden=false;MV.openT=performance.now();MV.cx=player.x;MV.cz=player.z;MV.zoom=2.5;mvClamp();mapCanvasFit();updMapUi();drawBigMap();}
+  $('mapOv').hidden=false;MV.openT=performance.now();MV.skipClick=true;MV.cx=player.x;MV.cz=player.z;MV.zoom=2.5;mvClamp();mapCanvasFit();updMapUi();drawBigMap();}
 function closeMap(lock){if(state!=='map')return;$('mapOv').hidden=true;state='play';if(lock)tryLock();}
 function endGame(){if(state==='over')return;state='over';if(NET.online)netLeave();
   try{if(document.pointerLockElement)document.exitPointerLock();}catch(e){}
@@ -2552,7 +2552,7 @@ mini.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();o
 $('mapBtn').addEventListener('click',()=>openMap());
 $('tPause').addEventListener('click',()=>{if(state==='play')pauseGame();});
 if(TOUCH){const po=$('pOpts');['musBtn','muteBtn','fsBtn'].forEach(id=>po.appendChild($(id)));}$('mapClose').addEventListener('click',()=>closeMap(true));
-$('mapOv').addEventListener('click',e=>{if(e.target.id==='mapOv'&&performance.now()-MV.openT>450)closeMap(true);});
+$('mapOv').addEventListener('pointerdown',()=>{MV.skipClick=false;});$('mapOv').addEventListener('click',e=>{if(MV.skipClick){MV.skipClick=false;return;}if(e.target.id==='mapOv')closeMap(true);});
 $('pClose').addEventListener('click',()=>closePanel(true));
 $('musBtn').addEventListener('click',()=>{musicOn=!musicOn;if(MUS)MUS.bus.gain.value=musicOn?1:0;$('musBtn').textContent=musicOn?'МУЗИКА: УВІМК':'МУЗИКА: ВИМК';});
 $('muteBtn').addEventListener('click',()=>{muted=!muted;if(MASTER)MASTER.gain.value=muted?0:1;$('muteBtn').textContent=muted?'ЗВУК: ВИМК':'ЗВУК: УВІМК';});
@@ -2742,7 +2742,11 @@ function loop(now){
       if(ci.textContent!==t)ci.textContent=t;ci.classList.toggle('low',low);}
     else{camera.position.set(player.x,player.y+(player.bus?1.25:1.6),player.z);const ci=$('carInfo');if(player.bus){const b=player.bus,t=b.wait>0?`ТУР-АВТОБУС · ЗУПИНКА «${busStops[b.next].ua.toUpperCase()}» · F — ВИЙТИ`:`ТУР-АВТОБУС · НАСТУПНА: ${busStops[b.next].ua.toUpperCase()}`;ci.hidden=false;if(ci.textContent!==t)ci.textContent=t;ci.classList.remove('low');}else ci.hidden=true;}
     if(zoom&&(player.wk!=='sniper'||player.car||!player.alive))zoom=false;const fov=zoom?22:72;if(Math.abs(camera.fov-fov)>.1){camera.fov+=(fov-camera.fov)*Math.min(1,dt*14);camera.updateProjectionMatrix();}$('scope').hidden=!zoom;
-    viewRoot.visible=player.alive&&!player.car&&!player.raft&&!player.heli&&!zoom;chuteMesh.visible=!!player.chute;
+    viewRoot.visible=player.alive&&!player.car&&!player.raft&&!player.heli&&!zoom;
+    {const V=player.car||player.heli,st=V&&SEATS[player.car?(player.car.sport?2:1):3];
+      if(st&&player.alive){if(!mySeat||mySeat.p!==player){if(mySeat)scene.remove(mySeat.ch.root);const ch=makeChar(myLook(),null,false);ch.legL.rotation.x=ch.legR.rotation.x=-Math.PI/2;ch.armL.rotation.x=ch.armR.rotation.x=-1;scene.add(ch.root);mySeat={ch,p:player};}
+        const c=Math.cos(V.h),s=Math.sin(V.h),oy=player.heli?0:0;mySeat.ch.root.visible=true;mySeat.ch.root.position.set(V.x+st.x*c+st.z*s,V.y+st.y+oy,V.z-st.x*s+st.z*c);mySeat.ch.root.rotation.y=V.h;}
+      else if(mySeat)mySeat.ch.root.visible=false;}chuteMesh.visible=!!player.chute;
     const sw=player.swingT>0?Math.sin((1-player.swingT/.28)*Math.PI):0,w=WEAPONS[player.wk];
     const bob=Math.sin(gameT*10)*Math.min(1,player.spd/5)*.02;
     viewRoot.position.set(.46,-.48+bob,-.74+(w.melee?0:sw*.08));viewRoot.rotation.set(w.melee?-sw*1.1:sw*.15,w.melee?sw*.5:0,0);
@@ -2779,7 +2783,7 @@ function netConnect(then,force){let url=$('srvUrl').value.trim().replace(/^https
   ws.onmessage=e=>{let m;try{m=JSON.parse(e.data);}catch(x){return;}netMsg(m);};
   ws.onerror=()=>{netStatus('Не вдалося підключитися. Сервер міг заснути — зачекай хвилину і натисни ще раз. Або перевір «Адреса сервера».');$('playBtn').disabled=false;};
   ws.onclose=()=>{$('playBtn').disabled=false;if(ws.bye||NET.ws!==ws)return;
-    if(NET.online||NET.re){const first=NET.online;NET.online=false;NET.re=true;if(first){feed("Зв'язок втрачено — перепідключаюся…");for(const r of NET.remotes.values())removeRemote(r);$('netPill').hidden=true;}
+    if(NET.online||NET.re){const first=NET.online;NET.online=false;NET.re=true;if(first){feed("Зв'язок втрачено — перепідключаюся…");for(const r of NET.remotes.values())removeRemote(r);}const np=$('netPill');np.hidden=false;np.textContent='ОФЛАЙН · ПЕРЕПІДКЛЮЧЕННЯ…';np.style.borderColor='#ff4d4d';
       NET.tries=(NET.tries||0)+1;if(NET.tries>40||state==='menu'){NET.re=false;feed("Не вдалося відновити зв'язок — гра продовжується офлайн");$('lb').hidden=true;return;}
       setTimeout(()=>{if(NET.re&&state!=='menu')netConnect(()=>netRaw(Object.assign({t:'quick'},hello())),true);},3000);}};}
 NET.remotes=new Map();NET.sendT=0;
@@ -2813,28 +2817,39 @@ function netMsg(m){
 function addRemote(id,name,look){if(NET.remotes.has(id))return NET.remotes.get(id);look=Object.assign({shirt:'#8e44ec',acc:'#ffd23f',hat:'cap',skin:SKINS[0],gender:'boy',mask:'none'},look||{});
   const r=makeEnt({id,name:String(name||'Гравець').slice(0,14),remote:true,look,wk:'sword',hp:100,maxHp:100,coins:0});r.ch=makeChar(look,'sword',false);r.tag=makeTag();r.ch.root.add(r.tag.sp);scene.add(r.ch.root);drawTag(r);
   r.tag.sp.material.depthTest=false;r.tag.sp.renderOrder=20;r.tag.sp.scale.set(2.2,.69,1);r.tx=r.x;r.ty=r.y;r.tz=r.z;r.vt=0;r.veh=null;NET.remotes.set(id,r);ents.push(r);return r;}
-function removeRemote(r){scene.remove(r.ch.root);if(r.veh)scene.remove(r.veh);NET.remotes.delete(r.id);const i=ents.indexOf(r);if(i>=0)ents.splice(i,1);}
+function removeRemote(r){remoteUnlink(r);scene.remove(r.ch.root);if(r.veh)scene.remove(r.veh);NET.remotes.delete(r.id);const i=ents.indexOf(r);if(i>=0)ents.splice(i,1);}
+function remoteLinkFind(r){if(!r.alive||!r.tvid)return null;const id=r.tvid;
+  if(r.vt===1||r.vt===2){const c=cars.find(c=>c.nid===id);if(c&&c.alive&&c.driver!==player&&(!c.netDrv||c.netDrv===r))return c;}
+  else if(r.vt===3){const h=helis.find(h=>h.nid===id);if(h&&h.alive&&h.pilot!==player&&(!h.netDrv||h.netDrv===r))return h;}return null;}
+function remoteUnlink(r){const L=r.link;if(!L)return;L.netDrv=null;L.v=0;L.vy=0;if(L.T){L.sleep=false;L.rest=0;}r.link=null;}
 function remoteState(r,m){const p=m.p;if(!p)return;r.tx=p[0];r.ty=p[1];r.tz=p[2];r.tyaw=p[3];r.vh=p[5];r.vy2=p[6];
   if(!r.alive&&m.a){r.alive=true;r.x=r.tx;r.y=r.ty;r.z=r.tz;}r.alive=!!m.a;r.hp=m.hp??r.hp;
   if(m.w&&m.w!==r.wk&&WEAPONS[m.w]){r.wk=m.w;setCharItem(r.ch,m.w);}
-  if((m.v|0)!==r.vt){r.vt=m.v|0;if(r.veh){scene.remove(r.veh);r.veh=null;}const k=REMOTE_V[r.vt];
-    if(k==='jeep')r.veh=makeJeep(r.look.shirt,null,false).g;else if(k==='sport')r.veh=makeSport(r.look.shirt).g;else if(k==='heli'){const hm=makeHeli(r.look.shirt);r.veh=hm.g;r.veh.userData.rotor=hm.rotor;}else if(k==='raft')r.veh=makeRaftMesh();
-    if(r.veh)scene.add(r.veh);}
+  r.vt=m.v|0;r.tvid=m.vid|0;const vkey=r.vt+':'+r.tvid+':'+(r.alive?1:0);
+  if(vkey!==r.vkey){r.vkey=vkey;remoteUnlink(r);if(r.veh){scene.remove(r.veh);r.veh=null;}
+    const L=remoteLinkFind(r);if(L){r.link=L;L.netDrv=r;}
+    else if(r.alive){const k=REMOTE_V[r.vt];
+      if(k==='jeep')r.veh=makeJeep(r.look.shirt,null,false).g;else if(k==='sport')r.veh=makeSport(r.look.shirt).g;else if(k==='heli'){const hm=makeHeli(r.look.shirt);r.veh=hm.g;r.veh.userData.rotor=hm.rotor;}else if(k==='raft')r.veh=makeRaftMesh();
+      if(r.veh)scene.add(r.veh);}}
   drawTag(r);}
+let mySeat=null;
 const SEATS={1:{x:-.45,y:.62,z:.12},2:{x:-.4,y:.2,z:-.3},3:{x:0,y:.95,z:.9}};
 function remoteStep(dt){for(const r of NET.remotes.values()){const k=Math.min(1,dt*10),ox=r.x,oz=r.z;r.x+=(r.tx-r.x)*k;r.y+=(r.ty-r.y)*k;r.z+=(r.tz-r.z)*k;
   let df=(r.tyaw||0)-r.face;while(df>Math.PI)df-=Math.PI*2;while(df<-Math.PI)df+=Math.PI*2;r.face+=df*k;r.spd=Math.hypot(r.x-ox,r.z-oz)/Math.max(dt,1e-4);
-  const vh=r.vh||0;
+  const vh=r.vh||0;let V=null;
+  if(r.link){const L=r.link;if(!L.alive||!r.alive){remoteUnlink(r);r.vkey='';}
+    else{L.x=r.x;L.z=r.z;L.h=vh;L.vy=0;if(r.vt===3){L.y=r.y-.6;L.rot=1;L.v=0;}else{L.y=r.y-.8;L.v=r.spd;L.sleep=true;}V=L;}}
   if(r.veh){r.veh.visible=r.alive;if(r.vt===3){r.veh.position.set(r.x,r.y-.6,r.z);if(r.veh.userData.rotor)r.veh.userData.rotor.rotation.y+=dt*28;}else if(r.vt===4)r.veh.position.set(r.x,tide+.12,r.z);else r.veh.position.set(r.x,r.y-.8,r.z);r.veh.rotation.y=vh;}
-  const seat=r.veh&&SEATS[r.vt];r.ch.root.visible=r.alive;
-  if(seat){const c=Math.cos(vh),s=Math.sin(vh),v=r.veh.position;r.ch.root.position.set(v.x+seat.x*c+seat.z*s,v.y+seat.y,v.z-seat.x*s+seat.z*c);r.ch.root.rotation.y=vh;
+  if(!V&&r.veh)V=r.veh.position;
+  const seat=V&&SEATS[r.vt];r.ch.root.visible=r.alive;
+  if(seat){const c=Math.cos(vh),s=Math.sin(vh),v=V;r.ch.root.position.set(v.x+seat.x*c+seat.z*s,v.y+seat.y,v.z-seat.x*s+seat.z*c);r.ch.root.rotation.y=vh;
     r.ch.legL.rotation.x=r.ch.legR.rotation.x=-Math.PI/2;r.ch.armL.rotation.x=r.ch.armR.rotation.x=-1;r.seated=true;}
   else{if(r.seated){r.seated=false;r.ch.legL.rotation.x=r.ch.legR.rotation.x=0;r.ch.armL.rotation.x=r.ch.armR.rotation.x=0;}
     r.ch.root.position.set(r.x,r.y,r.z);r.ch.root.rotation.y=r.face;if(r.ch.root.visible)animChar(r.ch,r,dt);}}}
 function myVeh(){const p=player;return p.car?(p.car.sport?2:1):p.heli?3:p.raft?4:p.bus?5:0;}
 function netTick(dt){if(!NET.online||!player)return;NET.sendT-=dt;if(NET.sendT>0)return;NET.sendT=.1;const p=player,v=myVeh(),vo=p.car||p.heli||p.raft||p.bus;
-  const R=x=>Math.round(x*100)/100;NET.send('s',{p:[R(p.x),R(p.y),R(p.z),R(p.car||p.heli?vo.h:p.raft?vo.yaw:p.bus?vo.h:p.yaw+Math.PI),0,R(vo?(vo.h??vo.yaw??0):0),0],v,w:p.wk,a:p.alive?1:0,hp:Math.max(0,Math.round(p.hp/p.maxHp*100))});}
-function updateNetPill(){const el=$('netPill');if(!NET.online){el.hidden=true;return;}el.hidden=false;el.textContent=`ОНЛАЙН${NET.roomN>1?' · КІМНАТА '+NET.roomN:''} · ГРАВЦІВ ${NET.remotes.size+1}`;}
+  const R=x=>Math.round(x*100)/100;NET.send('s',{p:[R(p.x),R(p.y),R(p.z),R(p.car||p.heli?vo.h:p.raft?vo.yaw:p.bus?vo.h:p.yaw+Math.PI),0,R(vo?(vo.h??vo.yaw??0):0),0],v,vid:(p.car&&p.car.nid)||(p.heli&&p.heli.nid)||0,w:p.wk,a:p.alive?1:0,hp:Math.max(0,Math.round(p.hp/p.maxHp*100))});}
+function updateNetPill(){const el=$('netPill');el.style.borderColor='';if(!NET.online){el.hidden=true;return;}el.hidden=false;el.textContent=`ОНЛАЙН${NET.roomN>1?' · КІМНАТА '+NET.roomN:''} · ГРАВЦІВ ${NET.remotes.size+1}`;}
 /* рейтинг: хто більше переміг — той вище; рядки плавно з'їжджають */
 const LB={rows:new Map(),order:[]};
 if(TOUCH)document.querySelector('.sub-pills').appendChild($('lb'));

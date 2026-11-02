@@ -4,11 +4,26 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { WebSocketServer } = require('ws');
+const crypto = require('crypto');
+/* ---- безкоштовний спін дня: облік без збереження справжніх IP ----
+   Зберігаємо лише солоний SHA-256 хеш IP і анонімного id пристрою + дату (UTC). Записи старші 2 днів видаляються. */
+const SPIN_SALT = process.env.SPIN_SALT || crypto.randomBytes(16).toString('hex');
+const SPIN_FILE = path.join(__dirname, 'freespin.json');
+let FREE = new Map();
+try { FREE = new Map(Object.entries(JSON.parse(fs.readFileSync(SPIN_FILE, 'utf8')))); } catch (e) {}
+const spinHash = v => crypto.createHash('sha256').update(SPIN_SALT + '|' + v).digest('hex').slice(0, 24);
+const today = () => new Date().toISOString().slice(0, 10);
+function spinSave() { const old = new Date(Date.now() - 2 * 864e5).toISOString().slice(0, 10);
+  for (const [k, d] of FREE) if (d < old) FREE.delete(k);
+  try { fs.writeFileSync(SPIN_FILE, JSON.stringify(Object.fromEntries(FREE))); } catch (e) {} }
+function clientIp(req) { const f = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim(); return f || req.socket.remoteAddress || '?'; }
 
 const PORT = process.env.PORT || 3000;
 const GAME = path.join(__dirname, 'public', 'index.html');
-const MAX_PLAYERS = 12;          // гравців в одній кімнаті; якщо більше — сервер сам відкриває наступну
+const MAX_PLAYERS = 25;          // гравців в одній кімнаті; якщо більше — сервер сам відкриває наступну
 const SEED = 20261029;            // одне місто для всіх
+const T0 = Date.now();            // спільний годинник: однаковий час доби для всіх гравців
+const VEH_RESPAWN = 180000;       // знищений транспорт повертається через 3 хвилини
 const LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 const server = http.createServer((req, res) => {
@@ -58,14 +73,15 @@ function publicRoom() {
   for (let n = 1; ; n++) {
     const code = 'R' + n;
     let r = rooms.get(code);
-    if (!r) { r = { code, n, pub: true, seed: SEED, host: 'Тимур-Бей', players: new Map(), blocks: [] }; rooms.set(code, r); }
+    if (!r) { r = { code, n, pub: true, seed: SEED, host: 'Тимур-Бей', players: new Map(), blocks: [], vehs: new Map(), weather: 'clear' }; rooms.set(code, r); }
     if (r.players.size < MAX_PLAYERS) return r;
   }
 }
 const roomList = () => [...rooms.values()].filter(r => r.players.size < MAX_PLAYERS)
   .map(r => ({ code: r.code, n: r.players.size, host: r.host }));
 
-wss.on('connection', ws => {
+wss.on('connection', (ws, req) => {
+  const ipH = spinHash('ip:' + clientIp(req));
   ws.alive = true;
   ws.on('pong', () => { ws.alive = true; });
   const me = { id: 'p' + (nextId++), ws, room: null, name: 'Гравець', look: {}, coins: 50, kills: 0, s: null, msgs: 0 };
@@ -82,7 +98,7 @@ wss.on('connection', ws => {
       let room;
       if (m.t === 'quick') room = publicRoom();
       else if (m.t === 'create') {
-        room = { code: newCode(), seed: Number.isFinite(m.seed) ? (m.seed | 0) : 20261029, host: clean(m.name), players: new Map(), blocks: [] };
+        room = { code: newCode(), seed: Number.isFinite(m.seed) ? (m.seed | 0) : 20261029, host: clean(m.name), players: new Map(), blocks: [], vehs: new Map(), weather: 'clear' };
         rooms.set(room.code, room);
       } else {
         room = rooms.get(String(m.room || '').toUpperCase());
@@ -93,7 +109,7 @@ wss.on('connection', ws => {
       if (Number.isFinite(+m.coins) && m.coins !== undefined) me.coins = Math.max(0, Math.min(1000000, Math.floor(+m.coins)));
       if (Number.isFinite(+m.kills) && m.kills !== undefined) me.kills = Math.max(0, Math.min(100000, Math.floor(+m.kills)));   // повернення після обриву зв'язку
       room.players.set(me.id, me);
-      send(ws, { t: 'joined', room: room.code, n: room.n || 0, id: me.id, seed: room.seed, coins: me.coins, blocks: room.blocks.slice(-3000),
+      send(ws, { t: 'joined', room: room.code, n: room.n || 0, id: me.id, now: Date.now(), t0: T0, weather: room.weather, vehs: [...room.vehs.values()], seed: room.seed, coins: me.coins, blocks: room.blocks.slice(-3000),
         players: [...room.players.values()].filter(p => p !== me).map(p => ({ id: p.id, name: p.name, look: p.look })) });
       broadcast(room, { t: 'join', id: me.id, name: me.name, look: me.look }, ws);
       sendScore(room);
@@ -105,9 +121,11 @@ wss.on('connection', ws => {
     switch (m.t) {
       case 's':     // стан гравця 10 разів на секунду
         me.s = m.p;
-        broadcast(room, { t: 's', id: me.id, p: m.p, v: m.v, vid: m.vid, w: m.w, a: m.a, hp: m.hp }, ws); break;
+        broadcast(room, { t: 's', id: me.id, p: m.p, v: m.v, vid: m.vid, sk: m.sk, w: m.w, a: m.a, hp: m.hp }, ws); break;
       case 'shot':
         broadcast(room, { t: 'shot', id: me.id, o: m.o, d: m.d, w: m.w }, ws); break;
+      case 'fw':    // салют над готелем «Єгор» — бачать усі
+        broadcast(room, { t: 'fw', x: +m.x || 0, y: +m.y || 0, z: +m.z || 0 }, ws); break;
       case 'boom':
         broadcast(room, { t: 'boom', x: m.x, y: m.y, z: m.z, r: m.r, c: m.c }, ws); break;
       case 'hit': {  // влучання: пересилаємо тільки тому, в кого влучили
@@ -121,6 +139,11 @@ wss.on('connection', ws => {
         if (k && k !== me) { const n = 25 + lost; k.coins += n; k.kills++; send(k.ws, { t: 'reward', n, name: me.name }); send(k.ws, { t: 'bal', coins: k.coins }); }
         broadcast(room, { t: 'die', id: me.id, by: k ? k.id : null }, ws); sendScore(room); break;
       }
+      case 'freeSpin': {  // 1 безкоштовна спроба на день: і для IP, і для пристрою
+        const devH = spinHash('dev:' + String(m.dev || '').slice(0, 64)), d = today();
+        if (FREE.get(ipH) === d || (m.dev && FREE.get(devH) === d)) { send(ws, { t: 'freeSpinNo' }); break; }
+        FREE.set(ipH, d); if (m.dev) FREE.set(devH, d); spinSave(); send(ws, { t: 'freeSpinOk' }); break;
+      }
       case 'coins': {  // сервер — "банк гри": тримає справжній баланс
         const d = Math.round(+m.d || 0);
         if (d > 0 && d <= 1000) me.coins += d; else if (d < 0 && me.coins + d >= 0) me.coins += d;
@@ -130,6 +153,12 @@ wss.on('connection', ws => {
         const b = { b: String(m.b), x: m.x | 0, z: m.z | 0, y: +m.y || 0 };
         room.blocks.push(['a', b]); if (room.blocks.length > 6000) room.blocks.splice(0, 1000);
         broadcast(room, Object.assign({ t: 'block' }, b), ws); break;
+      }
+      case 'veh': {  // де стоїть транспорт і що зруйновано — щоб у всіх був однаковий світ
+        const id = Math.floor(+m.id); if (!(id > 0)) break;
+        const v = m.dead ? { id, dead: 1, t: Date.now() } : { id, x: +m.x || 0, y: +m.y || 0, z: +m.z || 0, h: +m.h || 0, t: Date.now() };
+        if (room.vehs.size > 500 && !room.vehs.has(id)) break;
+        room.vehs.set(id, v); broadcast(room, Object.assign({ t: 'veh' }, v), ws); break;
       }
       case 'bdel': {
         const b = { x: m.x | 0, z: m.z | 0, y: +m.y || 0 };
@@ -149,5 +178,13 @@ setInterval(() => {   // відключаємо "мертві" з'єднання
   for (const ws of wss.clients) { if (!ws.alive) { ws.terminate(); continue; } ws.alive = false; ws.ping(); }
 }, 15000);
 setInterval(() => { for (const ws of wss.clients) if (ws.me) ws.me.msgs = 0; }, 1000);
+setInterval(() => {   // погода змінюється однаково для всіх у кімнаті
+  for (const r of rooms.values()) { const w = r.weather === 'rain' ? (Math.random() < .6 ? 'clear' : 'rain') : (Math.random() < .3 ? 'rain' : 'clear');
+    if (w !== r.weather) { r.weather = w; broadcast(r, { t: 'wx', w }); } }
+}, 180000);
+setInterval(() => {   // зруйнований транспорт відроджується — прибираємо старі записи
+  const now = Date.now();
+  for (const r of rooms.values()) for (const [id, v] of r.vehs) if (v.dead && now - v.t > VEH_RESPAWN) r.vehs.delete(id);
+}, 10000);
 
 server.listen(PORT, () => console.log('Тимур-Бей сервер працює на порту ' + PORT));
